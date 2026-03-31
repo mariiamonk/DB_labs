@@ -9,7 +9,7 @@
 
 **3 - Функциональная модель системы**  
 
-🔗 [Отчёт по ЛР1](https://github.com/mariiamonk/DB_labs/blob/main/DatabaseLabs.pdf)
+🔗 [Отчёт по ЛР1-3](https://github.com/mariiamonk/DB_labs/blob/main/DatabaseLabs.pdf)
 
 
 ## Лабораторная работа 4  
