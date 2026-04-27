@@ -199,11 +199,13 @@ def insert_sale_contract(cursor, count, property_ids, client_ids, manager_ids, r
 def insert_rent_contract(cursor, count, property_ids, client_ids, manager_ids, realtor_ids, bank_ids):
     print(f"  Заполнение RentContract ({count} записей)...")
     
+    all_rent_ids = []
+    
     for _ in range(count):
         cursor.execute("""
             INSERT INTO RentContract (PropertyId, TenantId, LandlordId, ManagerId, RealtorId, BankId,
                                        ContractDate, MonthlyRent, DurationMonths, OriginalContractId)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING ContractId
         """, (
             random.choice(property_ids),
             random.choice(client_ids),
@@ -211,13 +213,37 @@ def insert_rent_contract(cursor, count, property_ids, client_ids, manager_ids, r
             random.choice(manager_ids),
             random.choice(realtor_ids),
             random.choice(bank_ids),
-            generate_date(2023, 2025),
+            generate_date(2020, 2022), # Берем даты пораньше, чтобы было куда продлевать
             round(random.uniform(10000, 200000), 2),
-            random.choice([6, 12, 24, 36]),
+            random.choice([6, 12]),
             None
         ))
+        all_rent_ids.append(cursor.fetchone()[0])
+
+    for _ in range(5):
+        parent_id = random.choice(all_rent_ids)
+        
+        for _ in range(4):
+            cursor.execute("SELECT PropertyId, TenantId, LandlordId, ContractDate, DurationMonths FROM RentContract WHERE ContractId = %s", (parent_id,))
+            prop_id, tenant_id, landlord_id, prev_date, prev_dur = cursor.fetchone()
+            
+            new_date = prev_date + timedelta(days=prev_dur * 30)
+            
+            cursor.execute("""
+                INSERT INTO RentContract (PropertyId, TenantId, LandlordId, ManagerId, RealtorId, BankId,
+                                           ContractDate, MonthlyRent, DurationMonths, OriginalContractId)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING ContractId
+            """, (
+                prop_id, tenant_id, landlord_id, 
+                random.choice(manager_ids), random.choice(realtor_ids), random.choice(bank_ids),
+                new_date,
+                round(random.uniform(10000, 200000), 2),
+                random.choice([6, 12]),
+                parent_id
+            ))
+            parent_id = cursor.fetchone()[0] 
     
-    print(f"     Добавлено {count} договоров аренды")
+    print(f"     Добавлено {count + 20} договоров аренды (включая цепочки продлений)")
 
 def insert_agency_contract(cursor, count, client_ids, manager_ids):
     print(f"  Заполнение AgencyContract ({count} записей)...")
