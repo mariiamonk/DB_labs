@@ -1,7 +1,13 @@
 WITH RECURSIVE ContractChains AS (
+    --  самые первые договоры, у которых нет предка
     SELECT 
-        ContractId as RootId, 
-        ContractId, PropertyId, TenantId, MonthlyRent, DurationMonths, ContractDate
+        ContractId AS RootId, -- Метка всей цепочки
+        ContractId, 
+        PropertyId, 
+        TenantId, 
+        MonthlyRent, 
+        DurationMonths, 
+        ContractDate
     FROM RentContract
     WHERE OriginalContractId IS NULL
     
@@ -9,34 +15,60 @@ WITH RECURSIVE ContractChains AS (
     
     SELECT 
         cc.RootId, 
-        rc.ContractId, rc.PropertyId, rc.TenantId, rc.MonthlyRent, rc.DurationMonths, rc.ContractDate
+        rc.ContractId, 
+        rc.PropertyId, 
+        rc.TenantId, 
+        rc.MonthlyRent, 
+        rc.DurationMonths, 
+        rc.ContractDate
     FROM RentContract rc
     JOIN ContractChains cc ON rc.OriginalContractId = cc.ContractId
+),
+
+-- данные самого нового договора в каждой цепочке
+LastContractData AS (
+    SELECT DISTINCT ON (RootId) 
+        RootId, 
+        MonthlyRent AS LastPrice, 
+        ContractDate AS LastStartDate,
+        -- дата окончания дата старта + количество месяцев
+        (ContractDate + (DurationMonths || ' months')::interval)::date AS LastEndDate
+    FROM ContractChains
+    ORDER BY RootId, ContractDate DESC
 )
 
--- группируем всё по RootId
 SELECT 
-    -- описание объекта
-    'Адрес: ' || p.Address || ' (' || p.Type || ')' as "Объект",
-    c.FullName as "Арендатор",
+    -- Описание жилья
+    'Тип: ' || p.Type || ', Адрес: ' || p.Address || ', Площадь: ' || p.Area AS "Описание жилья",
+    cl.FullName AS "Участник договора",
+    MIN(cc.ContractDate) AS "Дата начала первого договора",
+    COUNT(cc.ContractId) AS "Число договоров",
+    lc.LastStartDate AS "Дата начала последнего",
+    lc.LastEndDate AS "Дата окончания последнего",
+    CASE 
+        WHEN lc.LastEndDate >= CURRENT_DATE THEN 'Да' 
+        ELSE 'Нет' 
+    END AS "Актуальный договор",
+    SUM(cc.MonthlyRent * cc.DurationMonths) AS "Общая сумма всех договоров",
+    ROUND(AVG(cc.MonthlyRent), 2) AS "Средняя цена за месяц",
+    lc.LastPrice AS "Цена последнего договора",
     
-    COUNT(*) as "Кол-во договоров",
-    MIN(cc.ContractDate) as "Начало",
-    SUM(cc.MonthlyRent * cc.DurationMonths) as "Общая сумма",
-    ROUND(AVG(cc.MonthlyRent), 2) as "Средняя цена",
-    
-    (SELECT ContractDate FROM RentContract 
-     WHERE OriginalContractId IS NOT NULL AND PropertyId = cc.PropertyId 
-     ORDER BY ContractDate DESC LIMIT 1) as "Дата последнего",
-     
-    -- Считаем выплаты риелтору по  цепочке
-    (SELECT COALESCE(SUM(Amount), 0) FROM PaymentDocument 
-     WHERE ContractId IN (SELECT ContractId FROM ContractChains WHERE RootId = cc.RootId)
-     AND Status = 'оплачен' AND DocumentType = 'исходящий_риелтору') as "Выплаты риелтору"
+    -- считаем через подзапрос по ID всех контрактов в цепочке
+    (SELECT COALESCE(SUM(pd.Amount), 0) 
+     FROM PaymentDocument pd 
+     WHERE pd.ContractId IN (SELECT cc2.ContractId FROM ContractChains cc2 WHERE cc2.RootId = cc.RootId)
+       AND pd.ContractType = 'аренда' 
+       AND pd.Status = 'оплачен' 
+       AND pd.DocumentType = 'исходящий_риелтору'
+    ) AS "Сумма выплат риелтору"
 
 FROM ContractChains cc
+JOIN LastContractData lc ON cc.RootId = lc.RootId
 JOIN Property p ON cc.PropertyId = p.PropertyId
-JOIN Client c ON cc.TenantId = c.ClientId
-
-GROUP BY cc.RootId, p.Address, p.Type, c.FullName, cc.PropertyId
-HAVING COUNT(*) > 3;
+JOIN Client cl ON cc.TenantId = cl.ClientId
+GROUP BY 
+    cc.RootId, 
+    p.Type, p.Address, p.Area, 
+    cl.FullName, 
+    lc.LastStartDate, lc.LastEndDate, lc.LastPrice
+HAVING COUNT(cc.ContractId) > 3;
