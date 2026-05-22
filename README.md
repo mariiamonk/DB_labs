@@ -20,16 +20,19 @@
 
 ## Лабораторная работа 5
 **Аналитические SQL-запросы**
+
 🔗 [Отчёт по ЛР5](https://github.com/mariiamonk/DB_labs/blob/main/lab5/лаба5.pdf)
 
 
 ## Лабораторная работа 6
 **Триггеры и хранимые процедуры**
+
 🔗 [Отчёт по ЛР6](https://github.com/mariiamonk/DB_labs/blob/main/lab6/lab6.pdf)
 
 
 ## Лабораторная работа 7 
 **Оптимизация и анализ выполнения запросов**
+
 🔗 [Отчёт по ЛР7](https://github.com/mariiamonk/DB_labs/blob/main/lab7/lab7.pdf)
 
 
